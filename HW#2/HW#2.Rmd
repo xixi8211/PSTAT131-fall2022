@@ -1,0 +1,94 @@
+---
+title: "PSTAT131/HW2"
+author: "Cynthia Cao"
+date: "2022-10-08"
+output: pdf_document
+---
+
+```{r}
+library(tidyverse)
+library(tidymodels)
+abalone <- read_csv("/Users/cynnnthiaaa/Desktop/abalone.csv")
+```
+
+Q1:
+```{r}
+abalone$age <- abalone$rings+1.5
+abalone
+ggplot(abalone, aes(x=age)) + geom_histogram()
+```
+From the graph, we can see that the distribution of age is roughly normal, most observations are between age of 7- 15.
+
+
+
+Q2:
+```{r}
+set.seed(3456)
+abalone_split <- initial_split(abalone, prop = 0.75,strata = age)
+train  <- training(abalone_split)
+test   <- testing(abalone_split)
+train
+test
+```
+
+Q3:
+```{r}
+new_abalone <- select(train,-rings)
+abalone_recipe <- recipe(age~.,data = new_abalone) %>%
+  step_dummy(type)
+
+abalone_recipe <- step_interact(abalone_recipe, terms = ~ shucked_weight : starts_with('type'))
+abalone_recipe <- step_interact(abalone_recipe, terms = ~ longest_shell : diameter)
+abalone_recipe <- step_interact(abalone_recipe, terms = ~ shucked_weight : shell_weight)
+
+abalone_recipe <- step_center(abalone_recipe, longest_shell, diameter, height, whole_weight, shucked_weight, viscera_weight, shell_weight)
+abalone_recipe <- step_scale(abalone_recipe, longest_shell, diameter, height, whole_weight, shucked_weight, viscera_weight, shell_weight)
+
+abalone_recipe
+```
+Since we already know the condition that age=rings+1.5, the relationship between two variables is fixed, then its unnecessary to include it in the prediction. 
+
+
+Q4:
+```{r}
+lm_model <- linear_reg() %>% 
+            set_engine('lm') %>% 
+            set_mode('regression')
+```
+
+Q5:
+```{r}
+workflow1 <- workflow() %>% 
+  add_model(lm_model) %>% 
+  add_recipe(abalone_recipe)
+```
+
+Q6:
+```{r}
+fit1 <- fit(workflow1, new_abalone)
+type <- c('F')
+longest_shell <- c(0.50)
+diameter <- c(0.10)
+height <- c(0.30)
+whole_weight <- c(4)
+shucked_weight <- c(1)
+viscera_weight <- c(2)
+shell_weight <- c(1)
+data1 <- data.frame(type, longest_shell,diameter,height,whole_weight,
+                         shucked_weight, viscera_weight, shell_weight)
+predict(fit1, new_data = data1)
+```
+Q7:
+```{r}
+library(yardstick)
+metric <- metric_set(rsq, rmse, mae)
+result1 <- predict(fit1, new_data=new_abalone %>% select(-age))
+result2 <- bind_cols(result1, new_abalone %>% select(age))
+result2
+metric(result2, truth = age, estimate = .pred)
+```
+R Square: 0.5580969	 (about 55.81% of variability of Y can be explained by X)
+Root Mean Square Error: 2.1463035	
+Mean Absolute Error: 1.5375481	
+
+
